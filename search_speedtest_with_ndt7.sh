@@ -20,21 +20,21 @@ OUTPUT_FILE="$5"
 SPEEDTEST_SERVER="$6"
 INTERFACE="$7"
 
-PCAP_DIR="./pcap_dumps"
+PCAP_DIR="./pcap_dumps_ndt7"
 mkdir -p "$PCAP_DIR"
 
 echo "====== Full speedtest for context ======" | tee "$OUTPUT_FILE"
-speedtest --server "$SPEEDTEST_SERVER" --secure| tee -a "$OUTPUT_FILE"
+ndt7-client | tee -a "$OUTPUT_FILE"
 
 for i in $(seq 1 "$REPEAT"); do
 	echo "====== Run $i ======" | tee -a "$OUTPUT_FILE"
 
 	# ---------- Pre-SEARCH Upload ----------
-	echo "1. Running pre-SEARCH speedtest-cli (download only with pcap)" | tee -a "$OUTPUT_FILE"
-	PCAP_FILE="${PCAP_DIR}/download_pre_run_${i}.pcap"
-	sudo tcpdump -i "$INTERFACE" tcp and port 8080 -w "$PCAP_FILE" &
+	echo "1. Running pre-SEARCH speedtest-cli (upload only with pcap)" | tee -a "$OUTPUT_FILE"
+	PCAP_FILE="${PCAP_DIR}/upload_pre_run_${i}.pcap"
+	sudo tcpdump -i "$INTERFACE" -w "$PCAP_FILE" &
 	TCPDUMP_PID=$!
-	speedtest --no-upload --server "$SPEEDTEST_SERVER" --secure | tee -a "$OUTPUT_FILE"
+	ndt7-client | tee -a "$OUTPUT_FILE"
 	sudo kill "$TCPDUMP_PID"
 	sleep 1
 
@@ -43,11 +43,11 @@ for i in $(seq 1 "$REPEAT"); do
 	iperf3 -c "$SERVER_IP" -t "$IPERF3_DWND_TIME" -R | tee -a "$OUTPUT_FILE"
 
 	# ---------- Post-SEARCH Upload ----------
-	echo "3. Running post-SEARCH speedtest (download only with pcap)" | tee -a "$OUTPUT_FILE"
-	PCAP_FILE="${PCAP_DIR}/download_post_run_${i}.pcap"
-	sudo tcpdump -i "$INTERFACE" tcp and port 8080 -w "$PCAP_FILE" &
+	echo "3. Running post-SEARCH speedtest (upload only with pcap)" | tee -a "$OUTPUT_FILE"
+	PCAP_FILE="${PCAP_DIR}/upload_post_run_${i}.pcap"
+	sudo tcpdump -i "$INTERFACE" -w "$PCAP_FILE" &
 	TCPDUMP_PID=$!
-	speedtest --no-upload --server "$SPEEDTEST_SERVER" --secure| tee -a "$OUTPUT_FILE"
+	ndt7-client | tee -a "$OUTPUT_FILE"
 	sudo kill "$TCPDUMP_PID"
 	sleep 1
 
