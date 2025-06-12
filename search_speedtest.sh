@@ -21,57 +21,67 @@ PCAP_DIR_PATH="$7"
 PCAP_DIR="./${PCAP_DIR_PATH}"
 mkdir -p "$PCAP_DIR"
 
-# Dynamically build initial fallback server list (top 5)
-readarray -t SPEEDTEST_SERVERS < <(speedtest --list --secure | grep -Eo '^[ ]*[0-9]+' | head -n 5 | tr -d ' ')
-echo "Initial Speedtest server list: ${SPEEDTEST_SERVERS[*]}" | tee -a "$OUTPUT_FILE"
+# Declare global arrays
+declare -a CACHED_SPEEDTEST_SERVERS
+declare -A TEMP_FAILED_SERVERS
 
+# Function to fetch a new top-5 server list
+fetch_speedtest_servers() {
+	readarray -t CACHED_SPEEDTEST_SERVERS < <(speedtest --list --secure | grep -Eo '^[ ]*[0-9]+' | head -n 5 | tr -d ' ')
+	echo "Fetched new server list: ${CACHED_SPEEDTEST_SERVERS[*]}" | tee -a "$OUTPUT_FILE"
+	# Reset failed server list
+	TEMP_FAILED_SERVERS=()
+}
+
+# Fetch initial server list once
+fetch_speedtest_servers
+
+# === Main speedtest function ===
 run_speedtest_with_fallback() {
 	local output_file="$1"
 	local pcap_file="$2"
-	local tried_servers=()
 	local success=0
 
-	sudo tcpdump -i "$INTERFACE" tcp and port 8080 -w "$pcap_file" &
+	sudo tcpdump -i "$INTERFACE" tcp and port 8080 -w "$pcap_file" 2>> "$output_file" &
 	local tcpdump_pid=$!
 
-	# Try initial list
-	for server_id in "${SPEEDTEST_SERVERS[@]}"; do
-		echo "Trying fallback server $server_id..." | tee -a "$output_file"
-		speedtest --no-upload --server "$server_id" --secure | tee -a "$output_file"
-		tried_servers+=("$server_id")
-		if [ "${PIPESTATUS[0]}" -eq 0 ]; then
-			success=1
-			break
-		else
-			echo "Server $server_id failed, trying next..." | tee -a "$output_file"
+	for attempt in {1..2}; do
+		for server_id in "${CACHED_SPEEDTEST_SERVERS[@]}"; do
+			if [[ -n "${TEMP_FAILED_SERVERS[$server_id]}" ]]; then
+				echo "Skipping failed server $server_id" | tee -a "$output_file"
+				continue
+			fi
+
+			echo "Trying server $server_id..." | tee -a "$output_file"
+
+			tmp_output=$(mktemp)
+			speedtest --no-upload --server "$server_id" --secure > "$tmp_output" 2>&1
+			exit_code=$?
+			cat "$tmp_output" | tee -a "$output_file"
+			rm "$tmp_output"
+
+			if [ "$exit_code" -eq 0 ]; then
+				success=1
+				break 2  # success, break out of both loops
+			else
+				echo "Server $server_id failed" | tee -a "$output_file"
+				TEMP_FAILED_SERVERS["$server_id"]=1
+			fi
+		done
+
+		# If all failed and it's the first attempt, refresh the list
+		if [ "$success" -ne 1 ] && [ "$attempt" -eq 1 ]; then
+			echo "All cached servers failed. Fetching a new list..." | tee -a "$output_file"
+			fetch_speedtest_servers
 		fi
 	done
 
-	# If all fail, try new dynamic list (excluding tried ones)
-	if [ "$success" -ne 1 ]; then
-		echo "All fallback servers failed. Fetching additional servers..." | tee -a "$output_file"
-		readarray -t new_servers < <(speedtest --list --secure | grep -Eo '^[ ]*[0-9]+' | head -n 15 | tr -d ' ')
-		for new_id in "${new_servers[@]}"; do
-			if [[ " ${tried_servers[*]} " =~ " ${new_id} " ]]; then
-				continue
-			fi
-			echo "Trying dynamic server $new_id..." | tee -a "$output_file"
-			speedtest --no-upload --server "$new_id" --secure | tee -a "$output_file"
-			if [ "${PIPESTATUS[0]}" -eq 0 ]; then
-				success=1
-				break
-			else
-				echo "Server $new_id also failed." | tee -a "$output_file"
-			fi
-		done
-	fi
-
-	sudo kill "$tcpdump_pid"
-	sudo pkill tcpdump
+	sudo kill "$tcpdump_pid" >/dev/null 2>&1
+	sudo pkill -f "tcpdump.*${INTERFACE}" >/dev/null 2>&1
 	sleep 1
 
 	if [ "$success" -ne 1 ]; then
-		echo "All speedtest servers failed (initial + dynamic)." | tee -a "$output_file"
+		echo "All speedtest attempts failed." | tee -a "$output_file"
 	fi
 }
 
