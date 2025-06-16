@@ -1,4 +1,19 @@
 #!/bin/bash
+#
+# This script automates repeated network performance tests using:
+#  - `speedtest` (download only) with pcap capture
+#  - `iperf3` reverse download test from a remote server
+#
+# Features:
+#  - Uses a dynamic list of the top 5 nearby Speedtest servers (refreshed if needed)
+#  - Tries each Speedtest server until one succeeds (fallback logic)
+#  - Captures packets during each Speedtest with tcpdump on a given interface
+#  - Logs output and errors to a specified file
+#  - Repeats the test a specified number of times, with configurable sleep between runs
+#
+# Usage:
+#   ./script.sh <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
+
 
 display_usage() {
 	echo "Usage: $0 <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>"
