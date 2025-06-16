@@ -42,7 +42,7 @@ run_speedtest_with_fallback() {
 	local pcap_file="$2"
 	local success=0
 
-	sudo tcpdump -i "$INTERFACE" tcp and port 8080 -w "$pcap_file" 2>> "$output_file" &
+	sudo tcpdump -i "$INTERFACE" tcp and port 8080 -s 200 -w "$pcap_file" 2>> "$output_file" &
 	local tcpdump_pid=$!
 
 	for attempt in {1..2}; do
