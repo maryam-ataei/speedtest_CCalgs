@@ -4,15 +4,15 @@ import matplotlib.pyplot as plt
 import os
 import bisect
 
-input_path = "/home/maryam/SEARCH/speedtest_CCalgs/6-speedtest_just_download_secure/speedtest_modemcable_justdownload2.txt"
-output_path = "/home/maryam/SEARCH/speedtest_CCalgs/6-speedtest_just_download_secure/result"
+input_path = "/home/maryam/SEARCH/speedtest_CCalgs/8_speedtest_homecable_new/speedtest_cablehome_new.txt"
+output_path = "/home/maryam/SEARCH/speedtest_CCalgs/8_speedtest_homecable_new/result"
 if not os.path.exists(output_path):
     os.makedirs(output_path)
 
-server_log_path = "/home/maryam/SEARCH/speedtest_CCalgs/6-speedtest_just_download_secure/server_speedtest_homecablemodem_just_download2/data/log_search"
-server_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/6-speedtest_just_download_secure/server_speedtest_homecablemodem_just_download2/data/pcap_server"
+server_log_path = "/home/maryam/SEARCH/speedtest_CCalgs/8_speedtest_homecable_new/server/data/log_search"
+server_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/8_speedtest_homecable_new/server/data/pcap_server"
 
-client_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/6-speedtest_just_download_secure/pcap_dumps"
+client_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/8_speedtest_homecable_new/client"
 
 
 
@@ -83,6 +83,91 @@ def calculate_cdf(data):
     n = len(sorted_data)
     cdf = [(i + 1) / n for i in range(n)]
     return sorted_data, cdf
+
+############################################################
+# calculate delivery rate based on log files
+avg_delivery_rates = []
+median_delivery_rates = []
+delivery_rate_at_exit = []
+exit_time_list = []
+total_bits_acked_at_exit_list = []
+skip_run_indices = set()
+
+if not os.path.exists(server_log_path):
+    print(f"Server log path {server_log_path} does not exist")
+else:
+    log_csv_files = [f for f in os.listdir(server_log_path) if f.endswith('.csv')]
+    if not log_csv_files:
+        print(f"No CSV files found in {server_log_path}")
+        exit()  
+    num_log_files = len(log_csv_files) - 1  # Get the last file
+
+    for j in range(num_log_files + 1):
+        log_csv_file_path = os.path.join(server_log_path, f"log_data{j+1}.csv")
+        if not os.path.exists(log_csv_file_path):
+            print(f"File {log_csv_file_path} does not exist")
+            continue
+
+        df_log = pd.read_csv(log_csv_file_path)
+
+        # Extract bytes acked and now
+        bytes_acked_list = df_log["total_byte_acked"].tolist()
+        now_list = df_log["start_time_zero_s"].tolist()
+        rtt_s_list = df_log["rtt_s"].tolist()
+        search_exit_time = df_log["search_ex_time_s"].tolist()
+
+        if not search_exit_time or search_exit_time[0] == 0 or search_exit_time[0] >= 2:
+            skip_run_indices.add(j + 1)
+            search_exit_time = None        
+
+        exit_time_list.append(search_exit_time[0] if search_exit_time else None)
+
+        if len(bytes_acked_list) == 0 or len(now_list) == 0 or len(rtt_s_list) == 0:
+            print(f"No valid data in {log_csv_file_path}")
+            continue
+
+        # Calculate delivery rates
+        delivery_rates_calculated, start_index_to_cal_delv_rate, time_cal_delv_rates = \
+        calculate_delivery_rate_per_ack(bytes_acked_list, now_list, rtt_s_list)
+
+        # convert delivery rates from MB/s to Mb/s
+        delivery_rates_calculated = [rate * 8 for rate in delivery_rates_calculated]
+
+        if delivery_rates_calculated is not None:
+            avg_delivery_rates.append(sum(delivery_rates_calculated) / len(delivery_rates_calculated))
+            median_delivery_rates.append(sorted(delivery_rates_calculated)[len(delivery_rates_calculated) // 2])
+            
+            # Find the delivery rate at the exit time
+            if search_exit_time:
+                exit_time = search_exit_time[0]
+                if exit_time < time_cal_delv_rates[-1]:
+                    index_at_exit = bisect.bisect_right(time_cal_delv_rates, exit_time) - 1
+                    if index_at_exit >= 0 and index_at_exit < len(delivery_rates_calculated):
+                        delivery_rate_at_exit.append(delivery_rates_calculated[index_at_exit])
+                    else: 
+                        delivery_rate_at_exit.append(None)
+                else:
+                    delivery_rate_at_exit.append(None)
+            else:
+                delivery_rate_at_exit.append(None)
+        else:
+            avg_delivery_rates.append(None)
+            median_delivery_rates.append(None)
+            delivery_rate_at_exit.append(None)
+
+
+        # find total bytes acked at the exit time
+        if search_exit_time:
+            exit_time = search_exit_time[0]
+            if exit_time < now_list[-1]:
+                index_at_exit = bisect.bisect_right(now_list, exit_time) - 1
+                total_bytes_acked_at_exit = bytes_acked_list[index_at_exit]
+            else:
+                total_bytes_acked_at_exit = bytes_acked_list[-1]
+        else:
+            total_bytes_acked_at_exit = None
+        total_bits_acked_at_exit_list.append(total_bytes_acked_at_exit * 8 if total_bytes_acked_at_exit is not None else None)
+
 #############################################################################################
 with open(input_path) as f:
     content = f.read()
@@ -93,6 +178,9 @@ data = []
 for run in runs:
     run_number = int(run.split()[0])
     parts = run.split("Running")
+
+    if run_number in skip_run_indices:
+        continue
 
     if TEST_WITH_SPEEDTEST:
         pre_speed = extract_speedtest_values(parts[1]) if len(parts) > 1 else (None, None, None)
@@ -152,6 +240,10 @@ else:
     num = len(csv_files) - 1  # Get the last file
 
     for i in range(num + 1):
+
+        if i + 1 in skip_run_indices:
+            continue
+
         throughputs = []
         timestamps_thput = []
 
@@ -215,82 +307,6 @@ else:
         plt.savefig(os.path.join(output_path, f"throughput_run_{i+1}.png"))
         plt.close()
 
-############################################################
-# calculate delivery rate based on log files
-avg_delivery_rates = []
-median_delivery_rates = []
-delivery_rate_at_exit = []
-exit_time_list = []
-total_bits_acked_at_exit_list = []
-
-if not os.path.exists(server_log_path):
-    print(f"Server log path {server_log_path} does not exist")
-else:
-    log_csv_files = [f for f in os.listdir(server_log_path) if f.endswith('.csv')]
-    if not log_csv_files:
-        print(f"No CSV files found in {server_log_path}")
-        exit()  
-    num_log_files = len(log_csv_files) - 1  # Get the last file
-
-    for j in range(num_log_files + 1):
-        log_csv_file_path = os.path.join(server_log_path, f"log_data{j+1}.csv")
-        if not os.path.exists(log_csv_file_path):
-            print(f"File {log_csv_file_path} does not exist")
-            continue
-
-        df_log = pd.read_csv(log_csv_file_path)
-
-        # Extract bytes acked and now
-        bytes_acked_list = df_log["total_byte_acked"].tolist()
-        now_list = df_log["start_time_zero_s"].tolist()
-        rtt_s_list = df_log["rtt_s"].tolist()
-        search_exit_time = df_log["search_ex_time_s"].tolist()
-
-        exit_time_list.append(search_exit_time[0] if search_exit_time else None)
-
-        if len(bytes_acked_list) == 0 or len(now_list) == 0 or len(rtt_s_list) == 0:
-            print(f"No valid data in {log_csv_file_path}")
-            continue
-
-        # Calculate delivery rates
-        delivery_rates_calculated, start_index_to_cal_delv_rate, time_cal_delv_rates = \
-        calculate_delivery_rate_per_ack(bytes_acked_list, now_list, rtt_s_list)
-
-        # convert delivery rates from MB/s to Mb/s
-        delivery_rates_calculated = [rate * 8 for rate in delivery_rates_calculated]
-
-        if delivery_rates_calculated is not None:
-            avg_delivery_rates.append(sum(delivery_rates_calculated) / len(delivery_rates_calculated))
-            median_delivery_rates.append(sorted(delivery_rates_calculated)[len(delivery_rates_calculated) // 2])
-            
-            # Find the delivery rate at the exit time
-            if search_exit_time:
-                exit_time = search_exit_time[0]
-                if exit_time < time_cal_delv_rates[-1]:
-                    index_at_exit = bisect.bisect_right(time_cal_delv_rates, exit_time) - 1
-                    delivery_rate_at_exit.append(delivery_rates_calculated[index_at_exit])
-                else:
-                    delivery_rate_at_exit.append(None)
-            else:
-                delivery_rate_at_exit.append(None)
-        else:
-            avg_delivery_rates.append(None)
-            median_delivery_rates.append(None)
-            delivery_rate_at_exit.append(None)
-
-
-        # find total bytes acked at the exit time
-        if search_exit_time:
-            exit_time = search_exit_time[0]
-            if exit_time < now_list[-1]:
-                index_at_exit = bisect.bisect_right(now_list, exit_time) - 1
-                total_bytes_acked_at_exit = bytes_acked_list[index_at_exit]
-            else:
-                total_bytes_acked_at_exit = bytes_acked_list[-1]
-        else:
-            total_bytes_acked_at_exit = None
-        total_bits_acked_at_exit_list.append(total_bytes_acked_at_exit * 8 if total_bytes_acked_at_exit is not None else None)
-
 #########################################################
 upload_duration_post_list = []
 upload_bits_sent_post_list = []
@@ -313,20 +329,25 @@ else:
         exit()
     num_client_pcap_files = len(client_pcap_files)
 
-    for k in range((num_client_pcap_files)// 2):
+    for k in range((num_client_pcap_files)):
+        if k + 1 in skip_run_indices:
+            continue
         client_pcap_file_postspeed_path = os.path.join(client_pcap_path, f"download_post_run_{k+1}.pcap")
         if not os.path.exists(client_pcap_file_postspeed_path):
             print(f"File {client_pcap_file_postspeed_path} does not exist")
-            continue
+            
         
         client_pcap_file_prespeed_path = os.path.join(client_pcap_path, f"download_pre_run_{k+1}.pcap")
         if not os.path.exists(client_pcap_file_prespeed_path):
             print(f"File {client_pcap_file_prespeed_path} does not exist")
-            continue
+            
         
         client_csv_file_path_list = []
-        client_csv_file_path_list.append(client_pcap_file_postspeed_path.replace('.pcap', '.csv'))
-        client_csv_file_path_list.append(client_pcap_file_prespeed_path.replace('.pcap', '.csv'))
+        # if the pcap files exist, convert them to csv files:
+        if os.path.exists(client_pcap_file_postspeed_path):
+            client_csv_file_path_list.append(client_pcap_file_postspeed_path.replace('.pcap', '.csv'))
+        if os.path.exists(client_pcap_file_prespeed_path):    
+            client_csv_file_path_list.append(client_pcap_file_prespeed_path.replace('.pcap', '.csv'))
 
         for client_csv_file_path in client_csv_file_path_list:
             tshark_command = f"tshark -r {client_csv_file_path.replace('.csv', '.pcap')} -T fields -e frame.time_relative -e ip.src \
@@ -385,7 +406,7 @@ if not df_client.empty:
     df_client.plot(x="Run", y=["Pre Download", "Post Download"], marker='o')
     plt.ylabel("Mb/s", fontsize=14)
     plt.title("Download Over Runs", fontsize=14)
-    plt.ylim([0, 110]) 
+    # plt.ylim([0, 110]) 
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
     plt.tight_layout()
@@ -409,7 +430,7 @@ if not df_client.empty and "Pre Download" in df_client.columns and "Post Downloa
     plt.legend()
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
-    plt.xlim([0, 100])  # Set x-axis to start from 0
+    # plt.xlim([0, 100])  # Set x-axis to start from 0
     plt.tight_layout()
     plt.savefig(os.path.join(output_path, "cdf_pre_post_download.png"))
     plt.close()
@@ -423,7 +444,7 @@ if avg_throughputs and median_throughputs:
     plt.ylabel("Mb/s", fontsize=14)
     plt.title("Average and Median Throughput Over Runs")
     plt.legend()
-    plt.ylim([0, 100]) 
+    # plt.ylim([0, 100]) 
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
     plt.tight_layout()
@@ -493,6 +514,7 @@ if exit_time_list:
     plt.close()
 
     # plot cdf of exit time
+    exit_time_list = [time for time in exit_time_list if time is not None]  # Remove None value
     cdf_exit_time, cdf_values_exit_time = calculate_cdf(exit_time_list)
     plt.figure()
     plt.plot(cdf_exit_time, cdf_values_exit_time, marker='o', label='CDF of Exit Time')
@@ -527,6 +549,8 @@ if avg_delivery_rates:
 
 # calculate cdf of delivery rate at exit and then plot it
 if delivery_rate_at_exit:
+    # Filter out None values from delivery_rate_at_exit
+    delivery_rate_at_exit = [rate for rate in delivery_rate_at_exit if rate is not None]
     cdf_delivery_rate_exit, cdf_values_exit = calculate_cdf(delivery_rate_at_exit)
 
     plt.figure()
@@ -558,8 +582,27 @@ if avg_delivery_rates and delivery_rate_at_exit:
     plt.savefig(os.path.join(output_path, "cdf_delivery_rates_combined.png"))
     plt.close()
 
+# plot the cdf of median delivery rates and delivery rate at exit in one figure
+if median_delivery_rates and delivery_rate_at_exit:
+    cdf_median_delivery_rates, cdf_values_median = calculate_cdf(median_delivery_rates)
+
+    plt.figure()
+    plt.plot(cdf_median_delivery_rates, cdf_values_median, marker='o', color='c', label='CDF of Median Delivery Rates')
+    plt.plot(cdf_delivery_rate_exit, cdf_values_exit, marker='o', color='m', label='CDF of Delivery Rate at Exit')
+    plt.xlabel("Mb/s", fontsize=14)  
+    plt.ylabel("CDF", fontsize=14)
+    plt.title("CDF of Median Delivery Rates and Delivery Rate at Exit")
+    plt.legend()
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+    plt.xlim(left=-0.05)  # Set x-axis to start from 0
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_path, "cdf_median_delivery_rates_combined.png"))
+    plt.close()
+
 # scatter plot of speed test pre download (x) and search exit delivery rate (y-axis), one dot for each run
 if not df_client.empty and delivery_rate_at_exit:
+    delivery_rate_at_exit = [rate for rate in delivery_rate_at_exit if rate is not None]
     plt.figure()
     plt.scatter(df_client["Pre Download"], delivery_rate_at_exit, marker='o', color='g')
     plt.xlabel("Pre Download Speed (Mb/s)", fontsize=14)
@@ -575,6 +618,8 @@ if not df_client.empty and delivery_rate_at_exit:
 
 # scatter plot of speed test pre download (x) and search exit delivery rate (y-axis), one dot for each run
 if not df_client.empty and delivery_rate_at_exit:
+    # Filter out None values from delivery_rate_at_exit
+    delivery_rate_at_exit = [rate for rate in delivery_rate_at_exit if rate is not None]
     plt.figure()
     plt.scatter(df_client["Post Download"], delivery_rate_at_exit, marker='o', color='brown')
     plt.xlabel("Post Download Speed (Mb/s)", fontsize=14)
@@ -596,7 +641,7 @@ if not df_client.empty and delivery_rate_at_exit:
 
     # plot normalized difference
     plt.figure()
-    plt.plot(range(1, num_log_files + 2), normalized_dif_post_exit_percent, marker='o', color='g', label='Normalized Difference')
+    plt.plot(range(1, len(normalized_dif_post_exit_percent)+1), normalized_dif_post_exit_percent, marker='o', color='g', label='Normalized Difference')
     plt.xlabel("Run", fontsize=14)
     plt.ylabel("Normalized Difference (%)", fontsize=14)
     plt.title("Normalized Difference Between Post Download Speed and Delivery Rate at Exit")    
@@ -617,7 +662,7 @@ if not df_client.empty and delivery_rate_at_exit:
     plt.legend()
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
-    plt.xlim(left=-10, right=20)  # Set x-axis to start from -100 to 100
+    # plt.xlim(left=-10, right=20)  # Set x-axis to start from -100 to 100
     plt.tight_layout()
     plt.savefig(os.path.join(output_path, "cdf_normalized_difference_post_download_vs_delivery_rate_exit.png"))
     plt.close()
@@ -630,7 +675,7 @@ if not df_client.empty and delivery_rate_at_exit:
     ) * 100
     # plot normalized difference
     plt.figure()
-    plt.plot(range(1, num_log_files + 2), normalized_dif_pre_exit_percent, marker='o', color='brown', label='Normalized Difference')
+    plt.plot(range(1, len(normalized_dif_pre_exit_percent) + 1), normalized_dif_pre_exit_percent, marker='o', color='brown', label='Normalized Difference')
     plt.xlabel("Run", fontsize=14)
     plt.ylabel("Normalized Difference (%)", fontsize=14)
     plt.title("Normalized Difference Between Pre Download Speed and Delivery Rate at Exit")
@@ -651,7 +696,7 @@ if not df_client.empty and delivery_rate_at_exit:
     plt.legend()
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
-    plt.xlim(left=-10, right=20)  # Set x-axis to start from -100 to 100
+    # plt.xlim(left=-10, right=20)  # Set x-axis to start from -100 to 100
     plt.tight_layout()
     plt.savefig(os.path.join(output_path, "cdf_normalized_difference_pre_download_vs_delivery_rate_exit.png"))
     plt.close()
