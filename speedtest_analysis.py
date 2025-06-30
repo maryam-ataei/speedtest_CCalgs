@@ -5,7 +5,7 @@ import os
 import bisect
 import numpy as np
 
-input_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/client/speedtest_homecable_24hrs.txt"
+speedtest_result_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/client/speedtest_homecable_24hrs.txt"
 output_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/result"
 if not os.path.exists(output_path):
     os.makedirs(output_path)
@@ -19,6 +19,9 @@ client_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_2
 
 TEST_WITH_SPEEDTEST = True
 TEST_WITH_NDT7 = False
+
+ONE_FILE_ALL_RUNS = False  # If True, it will read the input file contained all runs and extract speedtest values for each run
+SEPERATE_FILE_EACH_RUN = True  # If True, it will read the input file for single run and extract speedtest values for each run
 
 CALC_THROUGHPUT = True
 
@@ -321,55 +324,83 @@ else:
             skip_run_indices.add(j + 1)
 
 #############################################################################################
-with open(input_path) as f:
-    content = f.read()
+if ONE_FILE_ALL_RUNS:
+    with open(speedtest_result_path) as f:
+        content = f.read()
 
-runs = content.split("====== Run")[1:]  # Skip header part
-data = []
+    runs = content.split("====== Run")[1:]  # Skip header part
+    data = []
 
-for run in runs:
-    run_number = int(run.split()[0])
-    parts = run.split("Running")
+    for run in runs:
+        run_number = int(run.split()[0])
+        parts = run.split("Running")
 
-    # if run_number in skip_run_indices:
-    #     continue
+        # if run_number in skip_run_indices:
+        #     continue
 
-    if TEST_WITH_SPEEDTEST:
-        pre_speed = extract_speedtest_values(parts[1]) if len(parts) > 1 else (None, None, None)
-        iperf = extract_iperf3_throughput(parts[2]) if len(parts) > 2 else None
-        post_speed = extract_speedtest_values(parts[3]) if len(parts) > 3 else (None, None, None)
-        data.append({
-            "Run": run_number,
-            "Pre Ping": pre_speed[0],
-            "Pre Download": pre_speed[1],
-            "Pre Upload": pre_speed[2],
-            "iperf3 Throughput": iperf,
-            "Post Ping": post_speed[0],
-            "Post Download": post_speed[1],
-            "Post Upload": post_speed[2],
-        })        
-    elif TEST_WITH_NDT7:
-        pre_speed = extract_speedtest_values_ndt7(parts[1]) if len(parts) > 1 else (None, None, None)
-        iperf = extract_iperf3_throughput(parts[2]) if len(parts) > 2 else None
-        post_speed = extract_speedtest_values_ndt7(parts[3]) if len(parts) > 3 else (None, None, None)
+        if TEST_WITH_SPEEDTEST:
+            pre_speed = extract_speedtest_values(parts[1]) if len(parts) > 1 else (None, None, None)
+            iperf = extract_iperf3_throughput(parts[2]) if len(parts) > 2 else None
+            post_speed = extract_speedtest_values(parts[3]) if len(parts) > 3 else (None, None, None)
+            data.append({
+                "Run": run_number,
+                "Pre Ping": pre_speed[0],
+                "Pre Download": pre_speed[1],
+                "Pre Upload": pre_speed[2],
+                "iperf3 Throughput": iperf,
+                "Post Ping": post_speed[0],
+                "Post Download": post_speed[1],
+                "Post Upload": post_speed[2],
+            })        
+        elif TEST_WITH_NDT7:
+            pre_speed = extract_speedtest_values_ndt7(parts[1]) if len(parts) > 1 else (None, None, None)
+            iperf = extract_iperf3_throughput(parts[2]) if len(parts) > 2 else None
+            post_speed = extract_speedtest_values_ndt7(parts[3]) if len(parts) > 3 else (None, None, None)
 
-        data.append({
-            "Run": run_number,
-            "Pre Download": pre_speed[0],
-            "Pre Upload": pre_speed[1],
-            "iperf3 Throughput": iperf,
-            "Post Download": post_speed[0],
-            "Post Upload": post_speed[1],
-        })
+            data.append({
+                "Run": run_number,
+                "Pre Download": pre_speed[0],
+                "Pre Upload": pre_speed[1],
+                "iperf3 Throughput": iperf,
+                "Post Download": post_speed[0],
+                "Post Upload": post_speed[1],
+            })
 
 
 
-df_client = pd.DataFrame(data)
+    df_client = pd.DataFrame(data)
 
-# Save table to CSV
-csv_path = os.path.join(output_path, "speedtest_results.csv")
-df_client.to_csv(csv_path, index=False)
+    # Save table to CSV
+    csv_path = os.path.join(output_path, "speedtest_results.csv")
+    df_client.to_csv(csv_path, index=False)
 
+if SEPERATE_FILE_EACH_RUN:
+        data = []
+        files = sorted(os.listdir(speedtest_result_path))
+
+        for i, filename in enumerate(files, start=1):
+            if not filename.endswith(".txt"):
+                continue
+
+            file_path = os.path.join(speedtest_result_path, filename)
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+            download_speed = extract_speedtest_values_ndt7(content)
+            run_data = {
+                "Run": i,
+                "Pre Download": download_speed,
+                "Pre Upload": None,
+                "iperf3 Throughput": None,
+                "Post Download": None,
+                "Post Upload": None
+            }
+            data.append(run_data)
+
+        df = pd.DataFrame(data)
+        # Save table to CSV
+        csv_path = os.path.join(output_path, "speedtest_results.csv")
+        df_client.to_csv(csv_path, index=False)
 #####################################################
 if CALC_THROUGHPUT:
     # calculate throughput from pcap files on server
