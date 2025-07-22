@@ -1,28 +1,23 @@
 # speedtest Congestion Control Algorithms
 
-1. search_speedtest.sh
-   - Purpose: Automates download-only Speedtest runs and iperf3 tests using a dynamic list of the top 5 nearby Speedtest servers.
-   
-   - Features:
-   
-     * Uses fallback logic across servers.
-   
-     * Captures packets with tcpdump during each Speedtest.
-   
-     * Repeats tests and logs output.
-   
-   - Usage: ./search_speedtest.sh  <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
+## 📂 Scripts and Tools Overview
 
-3. search_speedtest_hardcoded_server_list.sh
-    - Purpose: Similar to the above script but uses a hardcoded list of 5 Speedtest server IDs.
-    
-    - Difference: Does not refresh server list dynamically. It retries the same fixed servers each run.
-    
-    - Use case: Useful for controlled experiments with fixed server conditions.
-    
-    - Usage: ./search_speedtest_hardcoded_server_list.sh <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
-    
-### Command Line Arguments
+This repository contains a suite of scripts and automation tools designed to evaluate TCP congestion control (especially SEARCH) using popular bandwidth testing tools and packet-level analysis.
+
+### 🔧 Shell Scripts
+
+| Script Name                                   | Description |
+|----------------------------------------------|-------------|
+| `search_speedtest.sh`                        | Automates Speedtest (Ookla) and iperf3 tests using the top 5 nearby Speedtest servers. Captures packets with `tcpdump` and logs outputs. |
+| `search_speedtest_hardcoded_server_list.sh`  | Like `search_speedtest.sh`, but uses a hardcoded list of 5 Speedtest server IDs. Ideal for fixed-server experiments. |
+| `search_speedtest_with_ndt7.sh`              | Combines `ndt7-client` (upload only) with `iperf3` to test performance before and after SEARCH. Includes pcap capture. |
+
+#### 🧪 Usage (Shell Scripts)
+```bash
+./search_speedtest.sh <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
+```
+
+#### 📌 Command Line Arguments
 
 | Argument             | Description                                                  |
 |----------------------|--------------------------------------------------------------|
@@ -34,42 +29,14 @@
 | `<interface>`        | Network interface for packet capture (e.g., `wlo1`, `eth0`)  |
 | `<pcap_path>`        | Directory to save `.pcap` files for pre- and post-tests      |
 
+---
 
-3. search_speedtest_with_ndt7.sh
-   - Purpose: Combines ndt7-client (upload tests) with iperf3 to evaluate performance before and after SEARCH.
-   
-   - Features:
-   
-     * Captures .pcap files during ndt7 tests.
-   
-     * Performs repeated runs.
-   
-   - Usage: <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <speedtest_server> <interface>
+### 🐍 Python Automation Scripts
 
-4. speedtest_analysis.py
-   - Purpose: Analyzes results from Speedtest, NDT7, and iperf3 test runs.
-   
-   - Key functions:
-   
-     * Parses speedtest logs and calculates metrics like ping, download/upload speeds.
-       
-     * Extracts throughput from pcap and CSV logs.
-   
-     * Calculates delivery rate per ACK or over fixed intervals.
-   
-     * Identifies SEARCH exit times based on server logs.
+| Script Name                    | Description |
+|--------------------------------|-------------|
+| `launch_speedtest_apps_iperf3.py` | Automates tests across Ookla Speedtest, NDT7, LibreSpeed, and iperf3. Captures `.pcap` files, kernel logs, and test outputs for each. Used in the final evaluation of multiple tools across networks. |
+| `launch_ndt7_iperf3.py`           | Automates upload-only `ndt7` tests with packet capture, followed by iperf3 tests to observe SEARCH behavior. |
+| `launch_libre_iperf3.py`         | Runs LibreSpeed (download-only) tests with `.pcap` collection and kernel module logging, followed by iperf3 tests using SEARCH. |
 
-5. speedtest_analysis_all_togther.py
-   - Purpose: Comprehensive analysis combining Ookla, NDT7, LibreSpeed, and SEARCH metrics.
-   
-   - Highlights:
-   
-     * Parses logs and pcap files from all tools.
-   
-     * Computes throughput, duration, bytes sent, and exit rates.
-   
-     * Generates comparative graphs (e.g., error vs. duration, error vs. bytes sent) across different networks (4G, Cable, GEO).
-   
-     * Implements advanced analysis like PCA-based grouping.
-   
-   - Used in: Final paper-level evaluation across multiple tools and networks.
+---
