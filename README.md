@@ -1,17 +1,17 @@
 # speedtest Congestion Control Algorithms
 
 1. search_speedtest.sh
-Purpose: Automates download-only Speedtest runs and iperf3 tests using a dynamic list of the top 5 nearby Speedtest servers.
+- Purpose: Automates download-only Speedtest runs and iperf3 tests using a dynamic list of the top 5 nearby Speedtest servers.
 
-Features:
+- Features:
 
-Uses fallback logic across servers.
+ -- Uses fallback logic across servers.
 
-Captures packets with tcpdump during each Speedtest.
+-- Captures packets with tcpdump during each Speedtest.
 
-Repeats tests and logs output.
+-- Repeats tests and logs output.
 
-Usage: Requires 7 arguments: <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
+- Usage: Requires 7 arguments: <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
 
 2. search_speedtest_hardcoded_server_list.sh
 Purpose: Similar to the above script but uses a hardcoded list of 5 Speedtest server IDs.
