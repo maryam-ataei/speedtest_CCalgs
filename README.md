@@ -5,11 +5,11 @@
 
 - Features:
 
- -- Uses fallback logic across servers.
+  --Uses fallback logic across servers.
 
--- Captures packets with tcpdump during each Speedtest.
+ --Captures packets with tcpdump during each Speedtest.
 
--- Repeats tests and logs output.
+ --Repeats tests and logs output.
 
 - Usage: Requires 7 arguments: <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
 
