@@ -5,7 +5,7 @@
 
 - Features:
 
-  *Uses fallback logic across servers.
+  * Uses fallback logic across servers.
 
  --Captures packets with tcpdump during each Speedtest.
 
