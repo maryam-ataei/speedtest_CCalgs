@@ -14,14 +14,14 @@
    - Usage: ./search_speedtest.sh  <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
 
 3. search_speedtest_hardcoded_server_list.sh
- - Purpose: Similar to the above script but uses a hardcoded list of 5 Speedtest server IDs.
- 
- - Difference: Does not refresh server list dynamically. It retries the same fixed servers each run.
- 
- - Use case: Useful for controlled experiments with fixed server conditions.
- 
- - Usage: ./search_speedtest_hardcoded_server_list.sh <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
- 
+    - Purpose: Similar to the above script but uses a hardcoded list of 5 Speedtest server IDs.
+    
+    - Difference: Does not refresh server list dynamically. It retries the same fixed servers each run.
+    
+    - Use case: Useful for controlled experiments with fixed server conditions.
+    
+    - Usage: ./search_speedtest_hardcoded_server_list.sh <server_IP> <iperf3_dwnd_time> <sleep_duration> <repeat> <output_file> <interface> <pcap_path>
+    
 ### Command Line Arguments
 
 | Argument             | Description                                                  |
