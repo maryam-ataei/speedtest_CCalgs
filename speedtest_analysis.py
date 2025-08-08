@@ -5,15 +5,16 @@ import os
 import bisect
 import numpy as np
 
-speedtest_result_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/client/speedtest_homecable_24hrs.txt"
-output_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/result"
+speedtest_result_path = "/home/maryam/SEARCH/speedtest_CCalgs/13_speedtest_server_linux_desktop_starbucks_wifi/speedtest_results_wifi_starbucks/all_data/client/speedtest_result"
+speedtest_result_file_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/client/speedtest_homecable_24hrs.txt"
+output_path = "/home/maryam/SEARCH/speedtest_CCalgs/13_speedtest_server_linux_desktop_starbucks_wifi/result"
 if not os.path.exists(output_path):
     os.makedirs(output_path)
 
-server_log_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/server/data/log_search"
-server_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/server/data/pcap_server"
+server_log_path = "/home/maryam/SEARCH/speedtest_CCalgs/13_speedtest_server_linux_desktop_starbucks_wifi/speedtest_results_wifi_starbucks/all_data/server/data/log_search"
+server_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/13_speedtest_server_linux_desktop_starbucks_wifi/speedtest_results_wifi_starbucks/all_data/server/data/pcap_server"
 
-client_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/9_speedtest_homecable_24hrs/client/pcap"
+client_pcap_path = "/home/maryam/SEARCH/speedtest_CCalgs/13_speedtest_server_linux_desktop_starbucks_wifi/speedtest_results_wifi_starbucks/all_data/client/pcap"
 
 
 
@@ -325,7 +326,7 @@ else:
 
 #############################################################################################
 if ONE_FILE_ALL_RUNS:
-    with open(speedtest_result_path) as f:
+    with open(speedtest_result_file_path) as f:
         content = f.read()
 
     runs = content.split("====== Run")[1:]  # Skip header part
